@@ -535,6 +535,21 @@ class Replay(Loadable):
         self.weight = weight
         self.loaded = True
 
+        block = list(zip(*[(e.time_since_previous_action, e.x, e.y, e.keys_pressed) for e in self.replay_data]))
+
+        t = np.array(block[0], dtype=int).cumsum()
+        xy = np.array([block[1], block[2]], dtype=float).T
+        k = np.array(block[3], dtype=int)
+
+        t_sort = np.argsort(t)
+        t = t[t_sort]
+        xy = xy[t_sort]
+        k = k[t_sort]
+
+        self.t = t
+        self.xy = xy
+        self.k = k
+
     def num_replays(self):
         return 1
 
@@ -663,6 +678,7 @@ class ReplayPath(Replay):
     def __init__(self, path, cache=None):
         self.log = logging.getLogger(__name__ + ".ReplayPath")
         self.path = path
+        self.hash = None
         self.cache = cache
         self.weight = RatelimitWeight.LIGHT
         self.loaded = False
@@ -708,6 +724,7 @@ class ReplayPath(Replay):
         loaded = circleparse.parse_replay_file(self.path)
         map_id = loader.map_id(loaded.beatmap_hash)
         user_id = loader.user_id(loaded.player_name)
+        self.hash = loaded.beatmap_hash
 
         Replay.__init__(self, loaded.timestamp, map_id, loaded.player_name, user_id, ModCombination(loaded.mod_combination),
                         loaded.replay_id, loaded.play_data, self.weight)
