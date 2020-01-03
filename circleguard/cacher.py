@@ -53,7 +53,7 @@ class Cacher:
         by the passed lzma.
 
         The lzma string is compressed with wtc compression. See
-        :func:`~circleguard.Cacher.compress` and :func:`~wtc.compress` for more.
+        :func:`~Cacher._compress` and :func:`wtc.compress` for more.
 
         A call to this method has no effect if the Cacher's ``should_cache``
         is ``False``.
@@ -150,7 +150,7 @@ class Cacher:
             The id of the map the replay was played on.
         user_id: int
             The id of the user that played the replay.
-        mods: :class:`circleguard.enums.ModCombination`
+        mods: :class:`~circleguard.enums.ModCombination`
             The mods this replay was played with.
 
         Returns
@@ -224,7 +224,7 @@ class Cacher:
         don't already exist.
         """
         self.log.info("Cache not found at path %s, creating cache", path)
-        if not os.path.exists(os.path.split(path)[0]):  # create dir if nonexistent
+        if not os.path.exists(os.path.split(path)[0]): # create dir if nonexistent
             os.makedirs(os.path.split(path)[0])
         conn = sqlite3.connect(str(path))
         c = conn.cursor()
