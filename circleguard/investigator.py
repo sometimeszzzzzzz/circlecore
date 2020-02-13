@@ -231,65 +231,33 @@ class Investigator:
         return hitobjs
 
     @staticmethod
-    def _compress(replay, press1, release1, press2, release2):
-        # compress the press and release data into presses
-
-        # return [Press(p, r, replay.data[p]) for (p, r) in zip(press1, release1)]
-        #        + [Press(p, r, replay.data[p]) for (p, r) in zip(press2, release2)]
-
-        # maybe sort
-        ...
-
-    @staticmethod
-    def _parse_keys_np_a(replay):
-        # more readable
-        k = replay.k
+    def _parse_keys2(replay):
+        t, xy, k = replay.t, replay.xy, replay.k
 
         bounded = np.hstack([[0], k, [0]])
-        bounded1 = bounded & Key.M1
-        bounded2 = bounded & Key.M2
 
-        diffs1 = np.diff(bounded1)
-        diffs2 = np.diff(bounded2)
+        P1 = Key.K1 | Key.M1
+        P2 = Key.K2 | Key.M2
 
-        run_starts_1, = np.where(diffs1 > 0)
-        run_ends_1, = np.where(diffs1 > 0)
-        run_starts_2, = np.where(diffs2 > 0)
-        run_ends_2, = np.where(diffs2 > 0)
+        bounded1 = bounded & P1
+        bounded2 = bounded & P2
 
-        return run_starts_1, run_ends_1, run_starts_2, run_ends_2
+        diff1 = np.diff(bounded1)
+        diff2 = np.diff(bounded2)
 
-    @staticmethod
-    def _parse_keys_np_b(replay):
-        # uses two less &s, and one less diff and where on a large array, but two more array-array indexings
-        k = replay.k
+        press1, = np.where(diff1 > 0)
+        release1, = np.where(diff1 < 0)
+        press2, = np.where(diff2 > 0)
+        release2, = np.where(diff2 < 0)
 
-        bounded = np.hstack([[0], k, [0]])
-        diffs = np.diff(bounded)
-        changes, = np.where(diffs != 0)
+        presses1 = [PressB(t[p], t[r], xy[p], k[p]) for p, r in zip(press1, release1)]
+        presses2 = [PressB(t[p], t[r], xy[p], k[p]) for p, r in zip(press2, release2)]
 
-        before = bounded[changes]
-        after = bounded[changes + 1]
+        presses = presses1 + presses2
 
-        before_1 = before & Key.M1
-        before_2 = before & Key.M2
-        after_1 = after & Key.M1
-        after_2 = after & Key.M2
+        presses.sort(key=lambda p: p.time_press)  # change to sorted merge to go from O(n log n) -> O(n)
 
-        diffs1 = after_1 - before_1
-        diffs2 = after_2 - before_2
-
-        run_starts_1, = np.where(diffs1 > 0)
-        run_ends_1, = np.where(diffs1 < 0)
-        run_starts_2, = np.where(diffs2 > 0)
-        run_ends_2, = np.where(diffs2 < 0)
-
-        run_starts_1 = changes[run_starts_1]
-        run_ends_1 = changes[run_ends_1]
-        run_starts_2 = changes[run_starts_2]
-        run_ends_2 = changes[run_ends_2]
-
-        return run_starts_1, run_ends_1, run_starts_2, run_ends_2
+        return presses
 
     @staticmethod
     def _parse_keys(replay):
@@ -362,7 +330,7 @@ class Investigator:
         hitwindow = od_to_ms(od).hit_50
         circle = circle_radius(cs)
         hitobjs = Investigator._parse_beatmap(beatmap, cs)
-        keypresses = Investigator._parse_keys(replay)
+        keypresses = Investigator._parse_keys2(replay)
         hit_array = Investigator._filter_hits(hitobjs, keypresses, hitwindow, circle)
         return hit_array
 
@@ -476,6 +444,14 @@ class Press:
         self.press_length = hit_end[0] - hit_begin[0]
         self.key = Key(hit_begin[3])
 
+class PressB(Press):
+    def __init__(self, t1, t2, xy1, k):
+        self.x = xy1[0]
+        self.y = xy1[1]
+        self.time_press = t1
+        self.time_release = t2
+        self.press_length = t2 - t1
+        self.key = Key(int(k))
 
 class HitObject:
     """
