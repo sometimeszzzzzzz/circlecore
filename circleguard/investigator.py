@@ -61,9 +61,7 @@ class Investigator:
         Calculates the ur of ``replay`` when played against ``beatmap``.
         """
         hm = Investigator.hit_map(replay, beatmap)
-        diff_array = []
-        for h in hm:
-            diff_array.append(h.hit_error)
+        diff_array = [h.hit_error for h in hm]
         return np.std(diff_array) * 10
 
     @staticmethod
