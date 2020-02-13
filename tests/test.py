@@ -111,6 +111,15 @@ class TestReplays(CGTestCase):
         self.assertAlmostEqual(r.ur, 32.16085272844355, delta=0.01, msg="UR is not correct")
         self.assertTrue(r.ischeat, "Macro replay was not detected as cheated for RelaxDetect")
 
+    def test_relax_cheated_nostack(self):
+        replays = [ReplayPath(RES / "relax_replay.osr")]
+        c = Check(replays, detect=RelaxDetect(70))
+        r = list(self.cg.run(c))
+        self.assertEqual(len(r), 1, f"{len(r)} results returned instead of 1")
+        r = r[0]
+        self.assertAlmostEqual(r.ur, 68.27, delta=0.01, msg="UR is not correct")
+        self.assertTrue(r.ischeat, "Macro replay was not detected as cheated for RelaxDetect")
+
     def test_relax_legit(self):
         replays = [ReplayPath(RES / "legit_replay1.osr")]
         c = Check(replays, detect=RelaxDetect())
@@ -136,6 +145,15 @@ class TestReplays(CGTestCase):
         self.assertEqual(len(r), 1, f"{len(r)} results returned instead of 1")
         r = r[0]
         self.assertAlmostEqual(r.ur, 147.58, delta=0.01, msg="UR is not correct")
+        self.assertFalse(r.ischeat, "Legitimate replay was detected as cheated for RelaxDetect")
+
+    def test_relax_legit3_nostack(self):
+        replays = [ReplayPath(RES / "legit_replay4.osr")]
+        c = Check(replays, detect=RelaxDetect())
+        r = list(self.cg.run(c))
+        self.assertEqual(len(r), 1, f"{len(r)} results returned instead of 1")
+        r = r[0]
+        self.assertAlmostEqual(r.ur, 147.12, delta=0.01, msg="UR is not correct")
         self.assertFalse(r.ischeat, "Legitimate replay was detected as cheated for RelaxDetect")
 
 
