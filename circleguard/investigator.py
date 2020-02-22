@@ -231,6 +231,8 @@ class Investigator:
     @staticmethod
     def _parse_keys2(replay):
         t, xy, k = replay.t, replay.xy, replay.k
+        if Mod.HR in replay.mods:
+            xy[:, 1] = 384 - xy[:, 1]  # I would prefer having this happen in hitmap or something but this works
 
         bounded = np.hstack([[0], k, [0]])
 
