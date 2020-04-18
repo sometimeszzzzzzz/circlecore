@@ -131,6 +131,36 @@ class Investigator:
         return [Snap(t, b, d) for (t, b, d) in zip(t[mask], beta[mask], min_AB_BC[mask])]
 
     @staticmethod
+    def aim_correction_poly(replay, min_distance, order=3):
+        n = order + 1
+        left = right = n // 2
+        left += n % 2
+
+        t = replay.t[1:-1]
+        xy = replay.xy
+        N = len(t)
+
+        skips = []
+
+        for i in range(left, N - right):
+            indices = np.r_[i-left:i, i+1:i+1+right]
+            local_t = t[indices]
+            local_xy = xy[indices]
+
+            actual_t, actual_xy = t[i], xy[i]
+
+            poly = np.polyfit(local_t, local_xy, order)
+
+            predict_xy = np.polyval(poly, actual_t)
+
+            dist = np.linalg.norm(predict_xy - actual_xy)
+
+            if dist > min_distance:
+                skips += [Skip(actual_t, dist)]
+
+        return skips
+
+    @staticmethod
     def aim_correction_sam(replay_data, num_jerks, min_jerk):
         """
         Calculates the jerk at each moment in the Replay, counts the number of times
@@ -249,3 +279,12 @@ class Snap():
     def __eq__(self, other):
         return (self.time == other.time and self.angle == other.angle
                 and self.distance == other.distance)
+
+class Skip():
+    """
+    A suspicious jump, bump or skip in a replay.
+    """
+
+    def __init__(self, time, distance):
+        self.time = time
+        self.distance = distance
