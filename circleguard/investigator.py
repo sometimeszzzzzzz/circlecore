@@ -209,9 +209,9 @@ class Investigator:
             hitobj_time = hitobjs[object_i][0]
             press_time = keypress_times[press_i]
 
-            if press_time < hitobj_time - hitwindow / 2:
+            if press_time < hitobj_time - hitwindow:
                 press_i += 1
-            elif press_time > hitobj_time + hitwindow / 2:
+            elif press_time > hitobj_time + hitwindow:
                 object_i += 1
             else:
                 array.append([hitobj_time, press_time])
