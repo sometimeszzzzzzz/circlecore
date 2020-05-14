@@ -55,10 +55,10 @@ class Investigator:
 
         hitobjs = Investigator._parse_beatmap(beatmap)
         keypress_times = Investigator._parse_keypress_times(replay)
-        filtered_array = Investigator._filter_hits(hitobjs, keypress_times, beatmap.overall_difficulty)
+        hits = Investigator._filter_hits(hitobjs, keypress_times, beatmap.overall_difficulty)
         diff_array = []
 
-        for hitobj_time, press_time in filtered_array:
+        for hitobj_time, press_time in hits:
             diff_array.append(press_time - hitobj_time)
         return np.std(diff_array) * 10
 
@@ -199,7 +199,7 @@ class Investigator:
 
     @staticmethod
     def _filter_hits(hitobjs, keypress_times, OD):
-        array = []
+        hits = []
         hitwindow = 150 + 50 * (5 - OD) / 5
 
         object_i = 0
@@ -214,11 +214,11 @@ class Investigator:
             elif press_time > hitobj_time + hitwindow:
                 object_i += 1
             else:
-                array.append([hitobj_time, press_time])
+                hits.append([hitobj_time, press_time])
                 press_i += 1
                 object_i += 1
 
-        return array
+        return hits
 
 class Snap():
     """
