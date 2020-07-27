@@ -262,11 +262,11 @@ class Investigator:
 
         Returns
         -------
-        ndarray(float, [float, float], bool)
+        ndarray(float, [float, float], float)
             The keydown frames for the replay. The first float is the time of
             that frame, the second and third floats are the x and y position
-            of the cursor at that frame, and the bool is whether this frame was
-            a zero frametime frame.
+            of the cursor at that frame, and the fourth float is the time of
+            the previous frame.
         """
         keydown_frames = []
         # the keys currently down for each frame
@@ -277,17 +277,11 @@ class Investigator:
         # remained the same or decreased (a key previously pressed is no longer
         # pressed) from the previous frame, ``keydowns`` is zero for that frame.
         keydowns = keypresses & ~np.insert(keypresses[:-1], 0, 0)
-        relative_t = np.diff(np.insert(replay.t, 0, 0))
 
         for i, keydown in enumerate(keydowns):
             if keydown != 0:
-                # not sure why, but notelock can be reduced by 1ms if the
-                # keypress frame has a frametime of 0ms so we need to keep track
-                # of the frames where this happens
-                if relative_t[i] == 0:
-                    keydown_frames.append([replay.t[i], replay.xy[i], True])
-                else:
-                    keydown_frames.append([replay.t[i], replay.xy[i], False])
+                # keep track of the previous frame as those affect the duration of notelock
+                keydown_frames.append([replay.t[i], replay.xy[i], replay.t[i-1]])
 
         # add a duplicate frame when 2 keys are pressed at the same time
         keydowns = keydowns[keydowns != 0]
@@ -347,7 +341,7 @@ class Investigator:
         # stable converts OD (and CS), which are originally a float32, to a
         # double and this causes some hitwindows to be messed up when casted to
         # an int so we replicate this
-        hitwindow = int(150 + 50 * (5 - float(np.float32(OD))) / 5) - 0.5
+        hitwindow = int(150 + 50 * (5 - float(np.float32(OD))) / 5)
 
         # attempting to match stable hitradius
         hitradius = np.float32(64 * ((1.0 - np.float32(0.7) * (float(np.float32(CS)) - 5) / 5)) / 2) * np.float32(1.00041)
@@ -362,10 +356,12 @@ class Investigator:
 
             keydown_t = keydowns[keydown_i][0]
             keydown_xy = keydowns[keydown_i][1]
+            prev_t = keydowns[keydown_i][2]
 
             if isinstance(hitobj, Circle):
                 hitobj_type = 0
-                hitobj_end_time = hitobj_t
+                # from testing, circle end time is 1ms longer than its hitwindow
+                hitobj_end_time = hitobj_t + hitwindow + 1
             elif isinstance(hitobj, Slider):
                 hitobj_type = 1
                 hitobj_end_time = hitobj.end_time.total_seconds() * 1000
@@ -382,34 +378,63 @@ class Investigator:
                     notelock_end_time = min(notelock_end_time, hitobj_end_time)
             # after sliderbug fix, notelock ends after hitobject end time
             else:
-                notelock_end_time = hitobj_end_time
-                # apparently notelock was increased by 2ms for circles
-                # (from testing)
-                if hitobj_type == 0:
-                    notelock_end_time += hitwindow + 2
-                # account for 0 frames that cause notelock to be 1ms shorter
-                if keydowns[keydown_i][2]:
-                    notelock_end_time -= 1
+                # explanation of how notelock works currently:
+                # the next hitobject can not be pressed on until the current object is "removed"
+                # (when player interaction with the hitobject is no longer possible)
+                # there are 3 ways a hitobject can be removed.
+                # 1. missing from pressing too early
+                # 2. pressing on the hitobject within the hitwindow50 ranges (a hit)
+                # 3. auto missing from not pressing on the hitobject at all
+                # (the game auto misses hitobjects after hitobject_end_time)
+                # the one that causes notelock is the 3rd one.
+                # but it isn't as simple as using the hitobject_end_time as the notelock_end_time
+                # since the game checks keypresses first before updating hitobjects
+                # best way to explain this is with an example
+                # e.g. there are two circles, one at 1000ms and one at 1050ms, the hitwindow50 is 100ms
+                # the replay data has a keydown at 1105ms with xy position on the 2nd circle
+                # and the frame in the replay data before that is at 1095ms
+                # even though the keydown time (1105ms) is after the first circle's time + hitwindow50 (1100ms)
+                # the game will show notelock on the 2nd circle
+                # this is because at the frame 1105ms, the game first checks the keydown
+                # with the hitobjects that can be interacted with
+                # this includes the first circle as the game has not removed it yet
+                # (the last check was at 1095ms, where the first circle still exists)
+                # after checking the keydown, the game then removes the first circle
+                # however if that 1095ms frame was at 1104ms instead, the 2nd circle will be hit
+                # as the 1104ms frame has caused the game to remove the first circle
+                # thus allowing the 2nd circle to be clicked on by the keydown at 1105ms
+                if keydown_t >= hitobj_end_time and prev_t < hitobj_end_time:
+                    notelock_end_time = prev_t + 1000/60
+                else:
+                    notelock_end_time = hitobj_end_time
 
 
             # can't press on hitobjects before hitwindowmiss
-            if keydown_t < hitobj_t - 399.5:
+            if keydown_t <= hitobj_t - 400:
                 keydown_i += 1
                 continue
 
-            if keydown_t < hitobj_t - hitwindow:
+            if keydown_t <= hitobj_t - hitwindow:
                 # pressing on a circle or slider during hitwindowmiss will cause
                 #  a miss
                 if np.linalg.norm(keydown_xy - hitobj_xy) <= hitradius and hitobj_type != 2:
 
                     # sliders don't disappear after missing
                     # so we skip to the press_i that is after notelock_end_time
-                    keydown_i += 1
-                    if keydown_i < len(keydowns) and hitobj_type == 1 and version >= version_sliderbug_fixed:
-                        while keydowns[keydown_i][0] <= notelock_end_time:
+                    if hitobj_type == 1 and version >= version_sliderbug_fixed:
+                        while keydowns[keydown_i][0] < notelock_end_time:
                             keydown_i += 1
                             if keydown_i >= len(keydowns):
                                 break
+                            # notelock_end_time changes for a keypress depending on the previous frame
+                            # so it needs to be updated every time keydown_i is increased
+                            prev_t = keydowns[keydown_i][2]
+                            if keydown_t >= hitobj_end_time and prev_t < hitobj_end_time:
+                                notelock_end_time = prev_t + 1000/60
+                            else:
+                                notelock_end_time = hitobj_end_time
+                    else:
+                        keydown_i += 1
                     hitobj_i += 1
                 # keypress not on object, so we move to the next keypress
                 else:
@@ -424,12 +449,20 @@ class Investigator:
 
                     # sliders don't disappear after clicking
                     # so we skip to the press_i that is after notelock_end_time
-                    keydown_i += 1
-                    if keydown_i < len(keydowns) and hitobj_type == 1 and version >= version_sliderbug_fixed:
-                        while keydowns[keydown_i][0] <= notelock_end_time:
+                    if hitobj_type == 1 and version >= version_sliderbug_fixed:
+                        while keydowns[keydown_i][0] < notelock_end_time:
                             keydown_i += 1
                             if keydown_i >= len(keydowns):
                                 break
+                            # notelock_end_time changes for a keypress depending on the previous frame
+                            # so it needs to be updated every time keydown_i is increased
+                            prev_t = keydowns[keydown_i][2]
+                            if keydown_t >= hitobj_end_time and prev_t < hitobj_end_time:
+                                notelock_end_time = prev_t + 1000/60
+                            else:
+                                notelock_end_time = hitobj_end_time
+                    else:
+                        keydown_i += 1
                     hitobj_i += 1
                 # keypress not on object, so we move to the next keypress
                 else:
