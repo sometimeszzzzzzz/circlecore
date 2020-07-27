@@ -378,7 +378,7 @@ class Investigator:
                     notelock_end_time = min(notelock_end_time, hitobj_end_time)
             # after sliderbug fix, notelock ends after hitobject end time
             else:
-                # explanation of how notelock works currently:
+                # explanation of how notelock works currently (at least my understanding of how it works):
                 # the next hitobject can not be pressed on until the current object is "removed"
                 # (when player interaction with the hitobject is no longer possible)
                 # there are 3 ways a hitobject can be removed.
@@ -386,7 +386,7 @@ class Investigator:
                 # 2. pressing on the hitobject within the hitwindow50 ranges (a hit)
                 # 3. auto missing from not pressing on the hitobject at all
                 # (the game auto misses hitobjects after hitobject_end_time)
-                # the one that causes notelock is the 3rd one.
+                # the one that affects notelock is the third one.
                 # but it isn't as simple as using the hitobject_end_time as the notelock_end_time
                 # since the game checks keypresses first before updating hitobjects
                 # best way to explain this is with an example
